@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flat Type Resale Price Trends</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #effaff; /* 浅天蓝色 */
+        }
+
+        body {
+    font-family: Arial, sans-serif;
+    background-color: #effaff; /* 浅天蓝色 */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    margin: 0;
+}
+
+h2 {
+    font-size: 40px;
+    text-align: center;
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+
+.description {
+    font-size: 20px;
+    text-align: center;
+    margin-top: 5px;
+}
+
+.legend {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 20px; /* 设置图例和图表之间的距离 */
+    font-size: 14px;
+}
+
+.chart-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* 使图表容器居中 */
+    width: 100%;
+    max-width: 1200px; /* 限制最大宽度 */
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    margin-right: 20px;
+}
+
+.legend-color {
+    width: 20px;
+    height: 20px;
+    margin-right: 5px;
+}
+
+.tooltip {
+    position: absolute;
+    background-color: white;
+    border: 1px solid #ddd;
+    padding: 8px;
+    border-radius: 4px;
+    pointer-events: none;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    font-size: 14px;
+}
+
+
+    </style>
+</head>
+<body>
+    <h2>Flat Type Resale Price Trends</h2>
+    <div class="description">
+        <p>This chart displays average resale prices by flat type and overall trends over the past 24 months (from Dec 2022 to Nov 2024), showcasing the price fluctuations in the HDB resale market.</p>
+    </div>
+
+    <div class="chart-container">
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #69b3a2;"></div>
+                Average Resale Price
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #6fa3ef;"></div>
+                Price Trend
+            </div>
+        </div>
+        <svg id="combo-chart"></svg>
+    </div>
+
+    <script>
+        const margin = { top: 50, right: 50, bottom: 60, left: 100 }; // Adjusted margin.top
+        const width = window.innerWidth * 0.8 - margin.left - margin.right;
+        const height = 500 - margin.top - margin.bottom;
+
+        const parseDate = d3.timeParse("%Y-%m");
+        const formatDate = d3.timeFormat("%b %Y");
+
+        const svg = d3.select("#combo-chart")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        const loadData = () => {
+            d3.csv("https://raw.githubusercontent.com/NemoFish0326/HCDIV-3/refs/heads/main/Resale%20flat%20prices%20based%20on%20registration%20date%20from%20Jan-2017%20onwards%20(3).csv").then(data => {
+                const now = new Date(2024, 10); // November 2024
+                const startDate = new Date(2022, 11); // December 2022
+
+                const filteredData = data.filter(d => {
+                    const date = parseDate(d.month);
+                    return date && date >= startDate && date <= now;
+                });
+
+                filteredData.forEach(d => {
+                    d.resale_price = +d.resale_price;
+                    d.month = parseDate(d.month);
+                });
+
+                // 确保 '1 Room' 排在第一个
+                const flatTypes = Array.from(new Set(filteredData.map(d => d.flat_type)))
+                    .sort((a, b) => (a === "1 Room" ? -1 : b === "1 Room" ? 1 : a.localeCompare(b)));
+
+                const avgPrices = flatTypes.map(type => ({
+                    flat_type: type,
+                    avg_price: d3.mean(filteredData.filter(d => d.flat_type === type), d => d.resale_price) || 0
+                }));
+
+                const monthlyPrices = Array.from(
+                    d3.rollup(filteredData, 
+                        v => d3.mean(v, d => d.resale_price), 
+                        d => d.month
+                    )
+                ).map(([month, avg_price]) => ({ month, avg_price }));
+
+                const x = d3.scaleBand()
+                    .domain(flatTypes)
+                    .range([0, width])
+                    .padding(0.1); // Reduced padding for narrower bars
+
+                const xTime = d3.scaleTime()
+                    .domain(d3.extent(monthlyPrices, d => d.month))
+                    .range([0, width]);
+
+                const yLeft = d3.scaleLinear()
+                    .domain([0, d3.max(avgPrices, d => d.avg_price)]).nice()
+                    .range([height, 0]);
+
+                const yRight = d3.scaleLinear()
+                    .domain([0, d3.max(monthlyPrices, d => d.avg_price)]).nice()
+                    .range([height, 0]);
+
+                svg.selectAll("*").remove();
+
+                svg.append("g")
+                    .attr("transform", `translate(0,${height})`)
+                    .call(d3.axisBottom(x));
+
+                svg.append("g")
+                    .call(d3.axisLeft(yLeft));
+
+                svg.append("g")
+                    .attr("transform", `translate(${width},0)`)
+                    .call(d3.axisRight(yRight));
+
+                // 创建 tooltip 元素
+                const tooltip = d3.select("body").append("div")
+                    .attr("class", "tooltip")
+                    .style("opacity", 0);
+
+                // Gradient definition for bars
+                const gradient = svg.append("defs")
+                    .append("linearGradient")
+                    .attr("id", "bar-gradient")
+                    .attr("x1", "0%")
+                    .attr("y1", "0%")
+                    .attr("x2", "0%")
+                    .attr("y2", "100%")
+                    .selectAll("stop")
+                    .data([
+                        { offset: "0%", color: "#69b3a2" },
+                        { offset: "100%", color: "#b0e0d3" }
+                    ])
+                    .enter().append("stop")
+                    .attr("offset", d => d.offset)
+                    .attr("stop-color", d => d.color);
+
+                // 绘制柱状图
+                svg.selectAll(".bar")
+                    .data(avgPrices)
+                    .enter().append("rect")
+                    .attr("class", "bar")
+                    .attr("x", d => x(d.flat_type))
+                    .attr("y", height)
+                    .attr("width", x.bandwidth() * 0.8) // Reduce width to 80%
+                    .attr("height", 0)
+                    .attr("fill", "url(#bar-gradient)") // Apply gradient
+                    .on("mouseover", (event, d) => {
+                        tooltip.transition().duration(200).style("opacity", 1);
+                        tooltip.html(`Flat Type: ${d.flat_type}<br>Avg Price: $${d.avg_price.toFixed(2)}`)
+                            .style("left", (event.pageX + 10) + "px")
+                            .style("top", (event.pageY - 30) + "px");
+                    })
+                    .on("mousemove", event => {
+                        tooltip.style("left", (event.pageX + 10) + "px")
+                               .style("top", (event.pageY - 30) + "px");
+                    })
+                    .on("mouseout", () => {
+                        tooltip.transition().duration(200).style("opacity", 0);
+                    })
+                    .transition()
+                    .duration(800)
+                    .attr("y", d => yLeft(d.avg_price))
+                    .attr("height", d => height - yLeft(d.avg_price));
+
+                // 绘制折线图（价格趋势）并添加动画
+                const line = d3.line()
+                    .x(d => xTime(d.month))
+                    .y(d => yRight(d.avg_price));
+
+                const path = svg.append("path")
+                    .datum(monthlyPrices)
+                    .attr("fill", "none")
+                    .attr("stroke", "#6fa3ef")
+                    .attr("stroke-width", 2)
+                    .attr("d", line);
+
+                // 添加动画效果
+                const pathLength = path.node().getTotalLength();
+
+                path
+                    .attr("stroke-dasharray", `${pathLength} ${pathLength}`)
+                    .attr("stroke-dashoffset", pathLength)
+                    .transition()
+                    .duration(2000) // 动画持续时间
+                    .ease(d3.easeLinear) // 线性动画
+                    .attr("stroke-dashoffset", 0);
+
+                // 绘制圆点标记折线上的数据
+                svg.selectAll(".dot")
+                    .data(monthlyPrices)
+                    .enter().append("circle")
+                    .attr("class", "dot")
+                    .attr("cx", d => xTime(d.month))
+                    .attr("cy", d => yRight(d.avg_price))
+                    .attr("r", 5)
+                    .attr("fill", "#6fa3ef")
+                    .on("mouseover", (event, d) => {
+                        tooltip.transition().duration(200).style("opacity", 1);
+                        tooltip.html(`Month: ${formatDate(d.month)}<br>Avg Price: $${d.avg_price.toFixed(2)}`)
+                            .style("left", (event.pageX + 10) + "px")
+                            .style("top", (event.pageY - 30) + "px");
+                    })
+                    .on("mousemove", event => {
+                        tooltip.style("left", (event.pageX + 10) + "px")
+                               .style("top", (event.pageY - 30) + "px");
+                    })
+                    .on("mouseout", () => {
+                        tooltip.transition().duration(200).style("opacity", 0);
+                    });
+            });
+        };
+
+        loadData();
+    </script>
+</body>
+</html>
