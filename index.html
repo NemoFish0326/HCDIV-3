@@ -9,71 +9,64 @@
         body {
             font-family: Arial, sans-serif;
             background-color: #effaff; /* 浅天蓝色 */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
         }
 
-        body {
-    font-family: Arial, sans-serif;
-    background-color: #effaff; /* 浅天蓝色 */
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100vh;
-    margin: 0;
-}
+        h2 {
+            font-size: 40px;
+            text-align: center;
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
 
-h2 {
-    font-size: 40px;
-    text-align: center;
-    margin-top: 10px;
-    margin-bottom: 10px;
-}
+        .description {
+            font-size: 20px;
+            text-align: center;
+            margin-top: 5px;
+        }
 
-.description {
-    font-size: 20px;
-    text-align: center;
-    margin-top: 5px;
-}
+        .legend {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px; /* 设置图例和图表之间的距离 */
+            font-size: 14px;
+        }
 
-.legend {
-    display: flex;
-    justify-content: center;
-    margin-bottom: 20px; /* 设置图例和图表之间的距离 */
-    font-size: 14px;
-}
+        .chart-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center; /* 使图表容器居中 */
+            width: 100%;
+            max-width: 1200px; /* 限制最大宽度 */
+        }
 
-.chart-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center; /* 使图表容器居中 */
-    width: 100%;
-    max-width: 1200px; /* 限制最大宽度 */
-}
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-right: 20px;
+        }
 
-.legend-item {
-    display: flex;
-    align-items: center;
-    margin-right: 20px;
-}
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            margin-right: 5px;
+        }
 
-.legend-color {
-    width: 20px;
-    height: 20px;
-    margin-right: 5px;
-}
-
-.tooltip {
-    position: absolute;
-    background-color: white;
-    border: 1px solid #ddd;
-    padding: 8px;
-    border-radius: 4px;
-    pointer-events: none;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    font-size: 14px;
-}
-
-
+        .tooltip {
+            position: absolute;
+            background-color: white;
+            border: 1px solid #ddd;
+            padding: 8px;
+            border-radius: 4px;
+            pointer-events: none;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
@@ -97,7 +90,7 @@ h2 {
     </div>
 
     <script>
-        const margin = { top: 50, right: 50, bottom: 60, left: 100 }; // Adjusted margin.top
+        const margin = { top: 50, right: 50, bottom: 60, left: 100 };
         const width = window.innerWidth * 0.8 - margin.left - margin.right;
         const height = 500 - margin.top - margin.bottom;
 
@@ -125,7 +118,6 @@ h2 {
                     d.month = parseDate(d.month);
                 });
 
-                // 确保 '1 Room' 排在第一个
                 const flatTypes = Array.from(new Set(filteredData.map(d => d.flat_type)))
                     .sort((a, b) => (a === "1 Room" ? -1 : b === "1 Room" ? 1 : a.localeCompare(b)));
 
@@ -144,18 +136,14 @@ h2 {
                 const x = d3.scaleBand()
                     .domain(flatTypes)
                     .range([0, width])
-                    .padding(0.1); // Reduced padding for narrower bars
+                    .padding(0.1);
 
                 const xTime = d3.scaleTime()
                     .domain(d3.extent(monthlyPrices, d => d.month))
                     .range([0, width]);
 
-                const yLeft = d3.scaleLinear()
-                    .domain([0, d3.max(avgPrices, d => d.avg_price)]).nice()
-                    .range([height, 0]);
-
-                const yRight = d3.scaleLinear()
-                    .domain([0, d3.max(monthlyPrices, d => d.avg_price)]).nice()
+                const y = d3.scaleLinear()
+                    .domain([0, d3.max([...avgPrices.map(d => d.avg_price), ...monthlyPrices.map(d => d.avg_price)])]).nice()
                     .range([height, 0]);
 
                 svg.selectAll("*").remove();
@@ -165,44 +153,21 @@ h2 {
                     .call(d3.axisBottom(x));
 
                 svg.append("g")
-                    .call(d3.axisLeft(yLeft));
+                    .call(d3.axisLeft(y));
 
-                svg.append("g")
-                    .attr("transform", `translate(${width},0)`)
-                    .call(d3.axisRight(yRight));
-
-                // 创建 tooltip 元素
                 const tooltip = d3.select("body").append("div")
                     .attr("class", "tooltip")
                     .style("opacity", 0);
 
-                // Gradient definition for bars
-                const gradient = svg.append("defs")
-                    .append("linearGradient")
-                    .attr("id", "bar-gradient")
-                    .attr("x1", "0%")
-                    .attr("y1", "0%")
-                    .attr("x2", "0%")
-                    .attr("y2", "100%")
-                    .selectAll("stop")
-                    .data([
-                        { offset: "0%", color: "#69b3a2" },
-                        { offset: "100%", color: "#b0e0d3" }
-                    ])
-                    .enter().append("stop")
-                    .attr("offset", d => d.offset)
-                    .attr("stop-color", d => d.color);
-
-                // 绘制柱状图
                 svg.selectAll(".bar")
                     .data(avgPrices)
                     .enter().append("rect")
                     .attr("class", "bar")
                     .attr("x", d => x(d.flat_type))
                     .attr("y", height)
-                    .attr("width", x.bandwidth() * 0.8) // Reduce width to 80%
+                    .attr("width", x.bandwidth() * 0.8)
                     .attr("height", 0)
-                    .attr("fill", "url(#bar-gradient)") // Apply gradient
+                    .attr("fill", "#69b3a2")
                     .on("mouseover", (event, d) => {
                         tooltip.transition().duration(200).style("opacity", 1);
                         tooltip.html(`Flat Type: ${d.flat_type}<br>Avg Price: $${d.avg_price.toFixed(2)}`)
@@ -218,13 +183,12 @@ h2 {
                     })
                     .transition()
                     .duration(800)
-                    .attr("y", d => yLeft(d.avg_price))
-                    .attr("height", d => height - yLeft(d.avg_price));
+                    .attr("y", d => y(d.avg_price))
+                    .attr("height", d => height - y(d.avg_price));
 
-                // 绘制折线图（价格趋势）并添加动画
                 const line = d3.line()
                     .x(d => xTime(d.month))
-                    .y(d => yRight(d.avg_price));
+                    .y(d => y(d.avg_price));
 
                 const path = svg.append("path")
                     .datum(monthlyPrices)
@@ -233,24 +197,22 @@ h2 {
                     .attr("stroke-width", 2)
                     .attr("d", line);
 
-                // 添加动画效果
                 const pathLength = path.node().getTotalLength();
 
                 path
                     .attr("stroke-dasharray", `${pathLength} ${pathLength}`)
                     .attr("stroke-dashoffset", pathLength)
                     .transition()
-                    .duration(2000) // 动画持续时间
-                    .ease(d3.easeLinear) // 线性动画
+                    .duration(2000)
+                    .ease(d3.easeLinear)
                     .attr("stroke-dashoffset", 0);
 
-                // 绘制圆点标记折线上的数据
                 svg.selectAll(".dot")
                     .data(monthlyPrices)
                     .enter().append("circle")
                     .attr("class", "dot")
                     .attr("cx", d => xTime(d.month))
-                    .attr("cy", d => yRight(d.avg_price))
+                    .attr("cy", d => y(d.avg_price))
                     .attr("r", 5)
                     .attr("fill", "#6fa3ef")
                     .on("mouseover", (event, d) => {
